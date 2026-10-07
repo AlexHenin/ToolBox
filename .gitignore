@@ -1,0 +1,7 @@
+.DS_Store
+.venv/
+Toolbox.app/
+mac/.build/
+__pycache__/
+*.py[cod]
+*.egg-info/
