@@ -130,12 +130,18 @@ def convert_value(field: dict[str, Any], raw: Any) -> Any:
     elif kind == "files":
         value = FileList(Path(item).expanduser() for item in raw)
     elif kind == "rectangle":
-        parts = raw if isinstance(raw, (list, tuple)) else str(raw).split(",")
+        if isinstance(raw, dict):
+            parts = [raw.get(key) for key in ("x", "y", "width", "height")]
+        else:
+            parts = raw if isinstance(raw, (list, tuple)) else str(raw).split(",")
         if len(parts) != 4:
             raise ValueError("Rectangle needs x,y,width,height")
         value = Rectangle(*(float(part) for part in parts))
     elif kind == "time_range":
-        parts = raw if isinstance(raw, (list, tuple)) else str(raw).split(",")
+        if isinstance(raw, dict):
+            parts = [raw.get(key) for key in ("start", "end")]
+        else:
+            parts = raw if isinstance(raw, (list, tuple)) else str(raw).split(",")
         if len(parts) != 2:
             raise ValueError("Time range needs start,end in seconds")
         value = TimeRange(*(float(part) for part in parts))

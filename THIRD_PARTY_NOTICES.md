@@ -13,3 +13,9 @@ Copyright © 2026 Shark contributors.
 Toolbox invokes separately installed [FFmpeg](https://ffmpeg.org/) and FFprobe executables as the media engine for the Trim tool. FFmpeg is not bundled with this repository.
 
 FFmpeg is primarily licensed under the GNU Lesser General Public License version 2.1 or later. Builds that include optional GPL components are licensed under the GNU General Public License version 2 or later. The exact license therefore depends on how the user's FFmpeg executable was built. See [FFmpeg's official license and legal information](https://ffmpeg.org/legal.html).
+
+## Model Context Protocol Python SDK
+
+Toolbox uses the official [Model Context Protocol Python SDK](https://github.com/modelcontextprotocol/python-sdk) to provide its MCP server. The SDK is licensed under the [MIT License](https://github.com/modelcontextprotocol/python-sdk/blob/main/LICENSE).
+
+Copyright © 2024 Anthropic, PBC.

@@ -1,6 +1,12 @@
 # Toolbox
 
-A local Mac utility app. Each tool is a typed Python function; the SwiftUI app builds its form from the tool's description and invokes the same CLI that scripts can call.
+A local Mac utility app that also doubles as an MCP tool server for AI clients. Each utility is defined once as a typed Python function and automatically becomes:
+
+- A native SwiftUI workflow
+- A command-line command
+- An MCP tool an AI model can discover and call
+
+Toolbox currently provides Convert, Crop, and Trim. The app and tool server operate on local files, so the same utilities are available for direct use and automated workflows without uploading files to a hosted conversion service.
 
 ## Installation
 
@@ -53,7 +59,45 @@ Toolbox uses [Shark](https://github.com/shineexxx/shark) as the conversion engin
 
 Toolbox uses [FFmpeg](https://ffmpeg.org/) and FFprobe as the media engine behind the Trim tool. They are installed separately and are not bundled with Toolbox. FFmpeg is primarily licensed under the LGPL 2.1 or later; builds containing optional GPL components are covered by the GPL 2 or later. See [Third-party notices](THIRD_PARTY_NOTICES.md) and [FFmpeg's official licensing information](https://ffmpeg.org/legal.html).
 
-The setup installs the Python package in the project environment and creates a CLI launcher that loads `python/` directly. A new tool file becomes available to the project CLI without rerunning setup. Run `./install-app.sh` and reopen the installed app to make the new tool available there.
+## MCP tool server
+
+`toolbox-mcp` exposes every registered Toolbox utility over the Model Context Protocol using the official Python SDK. It uses the local `stdio` transport: an MCP host launches the command as a child process and communicates with it through standard input and output. It does not open a network port.
+
+After running `./setup.sh`, add Toolbox to any MCP client using the absolute path to the launcher:
+
+```json
+{
+  "mcpServers": {
+    "toolbox": {
+      "command": "/absolute/path/to/Toolbox/.venv/bin/toolbox-mcp"
+    }
+  }
+}
+```
+
+For the installed copy, the command is:
+
+```text
+/Applications/Local Utilities/.venv/bin/toolbox-mcp
+```
+
+Restart the MCP client after changing its configuration. It can then discover and call:
+
+- `convert-files` with ordered `files`, a `target` format, and an `output` file or folder
+- `crop` with a `source`, relative `area` object, and `output` path
+- `trim` with a `source`, `segment` object in seconds, and `output` path
+
+Calls return both human-readable content and a structured result containing the tool name and resolved output path. Failures are returned as MCP tool errors so the calling model can correct its arguments. Input and output paths refer to files on the local Mac; only connect trusted MCP clients because tools can create or replace files at the requested output paths.
+
+The server can also be launched directly for development:
+
+```sh
+./.venv/bin/toolbox-mcp
+```
+
+No terminal output is expected while it waits for an MCP client. Adding another function with the `@tool` decorator automatically publishes it through the GUI, CLI, and MCP server.
+
+The setup installs the Python package in the project environment and creates CLI and MCP launchers that load `python/` directly. A new tool file becomes available to both launchers without rerunning setup. Run `./install-app.sh` and reopen the installed app to make the new tool available there.
 
 ## CLI examples
 
@@ -85,11 +129,12 @@ def copy_file(source: Path, output: Path) -> Path:
     return output
 ```
 
-The example is intentionally minimal; production tools should validate inputs and use `atomic_output` from `toolbox.files` so a failed run does not leave a partial result. Supported annotations are `Path`, `FileList`, `Rectangle`, `TimeRange`, `str`, `int`, `float`, `bool`, and string `Literal` choices. The `output` parameter is treated as a save destination. Each new tool is available through both the CLI and the generated form after restarting the app.
+The example is intentionally minimal; production tools should validate inputs and use `atomic_output` from `toolbox.files` so a failed run does not leave a partial result. Supported annotations are `Path`, `FileList`, `Rectangle`, `TimeRange`, `str`, `int`, `float`, `bool`, and string `Literal` choices. The `output` parameter is treated as a save destination. Each new tool is available through the CLI, generated app form, and MCP server after restarting the relevant client.
 
 ## Layout
 
 - `python/`: plugin registry, CLI, and tools
+- `python/toolbox/mcp_server.py`: MCP schemas, dispatch, and stdio server
 - `mac/`: SwiftUI app
 - `mac/Assets/AppIcon.svg`: white-background hammer icon used by `build-app.sh`
 - `tests/`: CLI and tool checks

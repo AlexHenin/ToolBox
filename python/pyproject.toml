@@ -5,12 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "toolbox-local"
 version = "0.1.0"
-description = "Local tools for the Toolbox Mac app and command line"
+description = "Local file tools for a Mac app, command line, and MCP clients"
 requires-python = ">=3.11"
-dependencies = ["Pillow>=11", "PyMuPDF>=1.26"]
+dependencies = ["mcp>=2.3,<3", "Pillow>=11", "PyMuPDF>=1.26"]
 
 [project.scripts]
 toolbox = "toolbox.cli:main"
+toolbox-mcp = "toolbox.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

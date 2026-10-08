@@ -12,6 +12,14 @@ unset PYTHONHOME
 PYTHONPATH="$project/python" exec "$project/.venv/bin/python" -m toolbox "$@"
 SH
 chmod +x .venv/bin/toolbox
+cat > .venv/bin/toolbox-mcp <<'SH'
+#!/bin/sh
+set -eu
+project="$(cd "$(dirname "$0")/../.." && pwd)"
+unset PYTHONHOME
+PYTHONPATH="$project/python" exec "$project/.venv/bin/python" -m toolbox.mcp_server "$@"
+SH
+chmod +x .venv/bin/toolbox-mcp
 if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
   printf '%s\n' 'FFmpeg is needed for Trim. Install with: brew install ffmpeg'
 fi
