@@ -25,6 +25,21 @@ brew install --cask shark
 brew install ffmpeg
 ```
 
+### Approve Shark on first use
+
+Shark is currently signed ad hoc rather than notarized with an Apple Developer ID. Because of this, macOS Gatekeeper blocks Shark the first time Toolbox tries to use the Convert tool. This approval is normally required only once for each Shark installation.
+
+To approve it:
+
+1. Click **Done** in the “Shark Not Opened” dialog.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll down to **Security**.
+4. Find the message saying Shark was blocked and click **Open Anyway**.
+5. Authenticate when prompted, then confirm **Open**.
+6. Retry **Convert** in Toolbox.
+
+Only approve Shark if you installed it from the documented [`shineexxx/tap`](https://github.com/shineexxx/homebrew-tap) Homebrew source and trust that software. Reinstalling the same Shark release does not avoid the first-run Gatekeeper approval.
+
 Clone Toolbox, prepare its Python environment, and install the app:
 
 ```sh
