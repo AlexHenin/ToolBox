@@ -1,5 +1,6 @@
 import AppKit
 import PDFKit
+import QuickLookUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -11,6 +12,7 @@ struct WorkspaceView: View {
     @State private var fileThumbnailFrames: [URL: CGRect] = [:]
     @State private var fileDragLocation: CGPoint = .zero
     @State private var fileInsertionIndex: Int?
+    @State private var previewedFileURL: URL?
 
     var body: some View {
         Group {
@@ -33,7 +35,9 @@ struct WorkspaceView: View {
             if isDropTarget {
                 RoundedRectangle(cornerRadius: Layout.lg)
                     .stroke(Palette.accent, style: StrokeStyle(lineWidth: 2, dash: [Layout.sm, Layout.xs]))
-                    .padding(Layout.md)
+                    .padding(.vertical, Layout.md)
+                    .padding(.trailing, Layout.md)
+                    .padding(.leading, Layout.sidebarWidth + Layout.md)
                     .overlay {
                         Text("Drop files to add")
                             .font(.system(size: 13, weight: .medium))
@@ -42,6 +46,13 @@ struct WorkspaceView: View {
                             .background(Palette.panel, in: Capsule())
                     }
                     .allowsHitTesting(false)
+            }
+            if let previewedFileURL {
+                FullscreenFilePreview(url: previewedFileURL) {
+                    self.previewedFileURL = nil
+                }
+                .transition(.opacity)
+                .zIndex(200)
             }
         }
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTarget, perform: importDroppedFiles)
@@ -155,7 +166,7 @@ struct WorkspaceView: View {
                     .disabled(store.running)
                 }
             }
-            .frame(maxWidth: 876, alignment: .leading)
+            .frame(maxWidth: tool.id == "crop" ? 1200 : 876, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, Layout.xl)
             .padding(.horizontal, Layout.contentInset)
@@ -267,6 +278,7 @@ struct WorkspaceView: View {
 
                                 ConversionFileThumbnail(
                                     url: url,
+                                    open: { previewedFileURL = url },
                                     remove: { store.removeFile(url, from: field.name) }
                                 )
                                 .frame(width: 88, height: 72)
@@ -307,7 +319,7 @@ struct WorkspaceView: View {
                     .onPreferenceChange(FileThumbnailFramePreferenceKey.self) { fileThumbnailFrames = $0 }
 
                     if let draggedFileURL {
-                        ConversionFileThumbnail(url: draggedFileURL, canRemove: false, remove: {})
+                        ConversionFileThumbnail(url: draggedFileURL, canRemove: false, open: {}, remove: {})
                             .frame(width: 88, height: 72)
                             .allowsHitTesting(false)
                             .shadow(radius: Layout.sm, y: Layout.xs)
@@ -468,7 +480,7 @@ struct WorkspaceView: View {
             if field.kind == "file", store.selected?.fields.contains(where: { $0.kind == "rectangle" }) == true,
                let url = selected.first {
                 CropPreview(url: url, crop: $store.crop)
-                    .frame(height: 330)
+                    .frame(height: 560)
             }
         }
     }
@@ -595,6 +607,7 @@ struct WorkspaceView: View {
 private struct ConversionFileThumbnail: View {
     let url: URL
     var canRemove = true
+    let open: () -> Void
     let remove: () -> Void
     @State private var isHovering = false
 
@@ -611,6 +624,8 @@ private struct ConversionFileThumbnail: View {
             }
         }
         .onHover { isHovering = $0 }
+        .simultaneousGesture(TapGesture().onEnded(open))
+        .help("Open \(url.lastPathComponent) full screen")
     }
 
     @ViewBuilder
@@ -632,6 +647,59 @@ private struct ConversionFileThumbnail: View {
                 .frame(width: 88, height: 72)
                 .background(Palette.window, in: RoundedRectangle(cornerRadius: Layout.sm))
                 .help(url.lastPathComponent)
+        }
+    }
+}
+
+private struct FullscreenFilePreview: View {
+    let url: URL
+    let close: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Layout.md) {
+                Text(url.lastPathComponent)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                Spacer()
+                Button(action: close) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.brightMuted)
+                        .frame(width: 28, height: 28)
+                        .background(Palette.overlayStrong, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .help("Close preview")
+                .accessibilityLabel("Close preview")
+            }
+            .padding(.horizontal, Layout.lg)
+            .frame(height: Layout.headerHeight)
+            .background(Palette.sidebar)
+
+            QuickLookPreview(url: url)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+        }
+        .background(Palette.window)
+    }
+}
+
+private struct QuickLookPreview: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> QLPreviewView {
+        let view = QLPreviewView(frame: .zero, style: .normal)
+        view?.autostarts = true
+        view?.previewItem = url as NSURL
+        return view!
+    }
+
+    func updateNSView(_ view: QLPreviewView, context: Context) {
+        if (view.previewItem as? NSURL) != url as NSURL {
+            view.previewItem = url as NSURL
+            view.refreshPreviewItem()
         }
     }
 }
