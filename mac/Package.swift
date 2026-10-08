@@ -5,5 +5,10 @@ let package = Package(
     name: "ToolboxApp",
     platforms: [.macOS(.v14)],
     products: [.executable(name: "ToolboxApp", targets: ["ToolboxApp"])],
-    targets: [.executableTarget(name: "ToolboxApp")]
+    targets: [
+        .executableTarget(
+            name: "ToolboxApp",
+            resources: [.process("Resources")]
+        )
+    ]
 )

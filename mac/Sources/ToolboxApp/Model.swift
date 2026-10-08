@@ -117,6 +117,18 @@ enum CLI {
 
 @MainActor
 final class ToolStore: ObservableObject {
+    private struct WorkspaceState {
+        var values: [String: String]
+        var files: [String: [URL]]
+        var crop: CGRect
+        var duration: Double
+        var waveform: [Double]
+        var mediaKind: String
+        var conversionTargets: [String]
+        var status: String
+        var result: URL?
+    }
+
     @Published var tools: [ToolSummary] = []
     @Published var selected: ToolDefinition?
     @Published var values: [String: String] = [:]
@@ -125,40 +137,104 @@ final class ToolStore: ObservableObject {
     @Published var duration: Double = 0
     @Published var waveform: [Double] = []
     @Published var waveformLoading = false
+    @Published var mediaKind = ""
+    @Published var conversionTargets: [String] = []
+    @Published var conversionTargetsLoading = false
     @Published var running = false
+    @Published private(set) var isLoading = true
     @Published var status = "Ready"
     @Published var result: URL?
+    private var definitions: [String: ToolDefinition] = [:]
+    private var workspaceStates: [String: WorkspaceState] = [:]
+    private var mediaInspectionURL: URL?
 
     func load() async {
+        defer { isLoading = false }
         do {
-            let response = try await CLI.run(["list"])
-            let data = try JSONSerialization.data(withJSONObject: response)
+            let response = try await CLI.run(["bootstrap"])
+            guard let object = response as? [String: Any],
+                  let list = object["tools"] else { throw CLIError.invalidResponse }
+            let data = try JSONSerialization.data(withJSONObject: list)
             tools = try JSONDecoder().decode([ToolSummary].self, from: data)
-            if let first = tools.first { await select(first.id) }
+            if let initialTool = object["initial_tool"] as? [String: Any] {
+                let definition = ToolDefinition(initialTool)
+                definitions[definition.id] = definition
+                applySelection(definition)
+            }
         } catch { status = error.localizedDescription }
     }
 
     func select(_ id: String) async {
+        guard selected?.id != id else { return }
+        saveCurrentWorkspace()
+        if let definition = definitions[id] {
+            applySelection(definition)
+            return
+        }
         do {
             let response = try await CLI.run(["describe", id])
             guard let object = response as? [String: Any] else { throw CLIError.invalidResponse }
-            selected = ToolDefinition(object)
-            values = [:]
-            files = [:]
-            result = nil
-            duration = 0
-            waveform = []
-            waveformLoading = false
-            crop = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
-            for field in selected?.fields ?? [] {
-                if let fallback = field.defaultValue { values[field.name] = fallback }
-                if field.kind == "time_range" { values[field.name + "_start"] = "0"; values[field.name + "_end"] = "0" }
-            }
-            status = "Ready"
+            let definition = ToolDefinition(object)
+            definitions[definition.id] = definition
+            applySelection(definition)
         } catch { status = error.localizedDescription }
     }
 
-    func chooseFiles(_ field: ToolField) {
+    private func saveCurrentWorkspace() {
+        guard let id = selected?.id else { return }
+        workspaceStates[id] = WorkspaceState(
+            values: values,
+            files: files,
+            crop: crop,
+            duration: duration,
+            waveform: waveform,
+            mediaKind: mediaKind,
+            conversionTargets: conversionTargets,
+            status: status,
+            result: result
+        )
+    }
+
+    private func applySelection(_ definition: ToolDefinition) {
+        selected = definition
+        if let saved = workspaceStates[definition.id] {
+            values = saved.values
+            files = saved.files
+            crop = saved.crop
+            duration = saved.duration
+            waveform = saved.waveform
+            waveformLoading = false
+            mediaKind = saved.mediaKind
+            conversionTargets = saved.conversionTargets
+            conversionTargetsLoading = false
+            status = saved.status
+            result = saved.result
+            mediaInspectionURL = nil
+            if definition.id == "trim", duration <= 0,
+               let field = definition.fields.first(where: { $0.kind == "file" }) {
+                startMediaInspection(for: field)
+            }
+            return
+        }
+        values = [:]
+        files = [:]
+        result = nil
+        duration = 0
+        waveform = []
+        waveformLoading = false
+        mediaKind = ""
+        conversionTargets = []
+        conversionTargetsLoading = false
+        mediaInspectionURL = nil
+        crop = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
+        for field in selected?.fields ?? [] {
+            if let fallback = field.defaultValue { values[field.name] = fallback }
+            if field.kind == "time_range" { values[field.name + "_start"] = "0"; values[field.name + "_end"] = "0" }
+        }
+        status = "Ready"
+    }
+
+    func chooseFiles(_ field: ToolField, appending: Bool = false) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -167,17 +243,127 @@ final class ToolStore: ObservableObject {
             panel.allowedContentTypes = field.extensions.compactMap { UTType(filenameExtension: $0) }
         }
         guard panel.runModal() == .OK else { return }
-        files[field.name] = panel.urls
+        let current = appending ? (files[field.name] ?? []) : []
+        files[field.name] = current + panel.urls.filter { url in !current.contains(url) }
+        inputFilesDidChange(field)
+    }
+
+    func importDroppedFiles(_ urls: [URL]) {
+        guard let tool = selected else { return }
+        let inputs = tool.fields.filter { $0.kind == "file" || $0.kind == "files" }
+        guard let field = inputs.first(where: { field in
+            urls.contains { accepts($0, for: field) }
+        }) else {
+            status = "These files are not supported by \(tool.title)."
+            return
+        }
+
+        let accepted = urls.filter { accepts($0, for: field) }
+        guard !accepted.isEmpty else { return }
+        let imported: [URL]
+        if field.kind == "files" {
+            let current = files[field.name] ?? []
+            imported = current + accepted.filter { !current.contains($0) }
+        } else {
+            imported = [accepted[0]]
+        }
+        files[field.name] = imported
+        inputFilesDidChange(field)
+    }
+
+    func removeFile(_ url: URL, from fieldName: String) {
+        guard var current = files[fieldName] else { return }
+        current.removeAll { $0 == url }
+        files[fieldName] = current
         result = nil
         status = "Ready"
-        if field.kind == "file", let url = panel.urls.first {
-            duration = 0
-            waveform = []
-            if ["mp3", "m4a", "wav"].contains(url.pathExtension.lowercased()) {
-                waveformLoading = true
-                Task { await inspect(url) }
-            }
+        if selected?.id == "trim" {
+            resetMediaInspection()
+            resetTrimRange()
+        } else if selected?.id == "crop" {
+            crop = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
         }
+        if selected?.id == "convert-files" { Task { await reloadConversionTargets() } }
+    }
+
+    private func inputFilesDidChange(_ field: ToolField) {
+        result = nil
+        status = "Ready"
+        if selected?.id == "trim", field.kind == "file" {
+            resetMediaInspection()
+            resetTrimRange()
+            startMediaInspection(for: field)
+        }
+        if selected?.id == "convert-files" { Task { await reloadConversionTargets() } }
+    }
+
+    private func startMediaInspection(for field: ToolField) {
+        guard let url = files[field.name]?.first else { return }
+        waveformLoading = true
+        mediaInspectionURL = url
+        Task { await inspect(url, fieldName: field.name) }
+    }
+
+    private func resetMediaInspection() {
+        mediaInspectionURL = nil
+        duration = 0
+        waveform = []
+        waveformLoading = false
+        mediaKind = ""
+    }
+
+    private func resetTrimRange() {
+        guard let range = selected?.fields.first(where: { $0.kind == "time_range" }) else { return }
+        values[range.name + "_start"] = "0"
+        values[range.name + "_end"] = "0"
+    }
+
+    func moveFile(_ url: URL, toInsertionIndex rawDestination: Int, in fieldName: String) {
+        guard var current = files[fieldName],
+              let sourceIndex = current.firstIndex(of: url) else { return }
+        let file = current.remove(at: sourceIndex)
+        var destination = rawDestination
+        if sourceIndex < rawDestination { destination -= 1 }
+        destination = max(0, min(destination, current.count))
+        current.insert(file, at: destination)
+        files[fieldName] = current
+        result = nil
+        status = "Ready"
+    }
+
+    func reloadConversionTargets() async {
+        guard selected?.id == "convert-files",
+              let field = selected?.fields.first(where: { $0.kind == "files" }) else { return }
+        let selectedFiles = files[field.name] ?? []
+        guard !selectedFiles.isEmpty else {
+            conversionTargets = []
+            conversionTargetsLoading = false
+            values["target"] = ""
+            return
+        }
+        conversionTargetsLoading = true
+        defer { conversionTargetsLoading = false }
+        do {
+            let response = try await CLI.run(["conversion-targets"] + selectedFiles.map(\.path))
+            guard files[field.name] == selectedFiles else { return }
+            conversionTargets = response as? [String] ?? []
+            if !conversionTargets.contains(values["target"] ?? "") {
+                values["target"] = conversionTargets.first ?? ""
+            }
+            if conversionTargets.isEmpty {
+                status = "The selected files do not share a conversion format."
+            } else if status != "Ready" {
+                status = "Ready"
+            }
+        } catch {
+            conversionTargets = []
+            values["target"] = ""
+            status = error.localizedDescription
+        }
+    }
+
+    private func accepts(_ url: URL, for field: ToolField) -> Bool {
+        !url.hasDirectoryPath && (field.extensions.isEmpty || field.extensions.contains(url.pathExtension.lowercased()))
     }
 
     func chooseOutput(_ field: ToolField) -> URL? {
@@ -197,23 +383,37 @@ final class ToolStore: ObservableObject {
         return "\(source)-\(selected?.id ?? "output").\(suffix)"
     }
 
-    func inspect(_ url: URL) async {
-        guard url.pathExtension.lowercased() == "mp3" || url.pathExtension.lowercased() == "m4a" || url.pathExtension.lowercased() == "wav" else { return }
-        defer { waveformLoading = false }
+    private func inspect(_ url: URL, fieldName: String) async {
+        defer {
+            if mediaInspectionURL == url {
+                waveformLoading = false
+                mediaInspectionURL = nil
+            }
+        }
         do {
             let response = try await CLI.run(["inspect", url.path, "--waveform"])
-            guard files.values.contains(where: { $0.contains(url) }) else { return }
+            guard selected?.id == "trim",
+                  mediaInspectionURL == url,
+                  files[fieldName]?.contains(url) == true else { return }
             let object = response as? [String: Any] ?? [:]
             duration = object["duration"] as? Double ?? 0
+            mediaKind = object["kind"] as? String ?? ""
             waveform = object["waveform"] as? [Double] ?? []
             if let field = selected?.fields.first(where: { $0.kind == "time_range" }) {
                 values[field.name + "_end"] = String(format: "%.2f", duration)
             }
-        } catch { status = error.localizedDescription }
+        } catch {
+            guard mediaInspectionURL == url else { return }
+            status = error.localizedDescription
+        }
     }
 
     func execute() async {
         guard let tool = selected else { return }
+        if tool.id == "convert-files" {
+            await executeConversion(tool)
+            return
+        }
         guard let outputField = tool.fields.first(where: { $0.kind == "output" }),
               let destination = chooseOutput(outputField) else { return }
         var arguments = ["run", tool.id]
@@ -246,5 +446,54 @@ final class ToolStore: ObservableObject {
             status = "Done"
         } catch { status = error.localizedDescription }
         running = false
+    }
+
+    private func executeConversion(_ tool: ToolDefinition) async {
+        guard let filesField = tool.fields.first(where: { $0.kind == "files" }) else { return }
+        let selectedFiles = files[filesField.name] ?? []
+        guard !selectedFiles.isEmpty else { return }
+        let target = values["target"] ?? ""
+        guard !target.isEmpty else {
+            status = "Choose an output format."
+            return
+        }
+        guard let destination = chooseConversionDestination(files: selectedFiles, target: target) else { return }
+
+        var arguments = ["run", tool.id, "--files"]
+        arguments.append(contentsOf: selectedFiles.map(\.path))
+        arguments.append(contentsOf: ["--target", target, "--output", destination.path])
+        running = true
+        status = "Converting…"
+        result = nil
+        do {
+            let response = try await CLI.run(arguments)
+            guard let path = (response as? [String: Any])?["output"] as? String else { throw CLIError.invalidResponse }
+            result = URL(fileURLWithPath: path)
+            status = "Done"
+        } catch { status = error.localizedDescription }
+        running = false
+    }
+
+    private func chooseConversionDestination(files: [URL], target: String) -> URL? {
+        let imageExtensions: Set<String> = [
+            "avif", "bmp", "exr", "gif", "heic", "heif", "ico", "jfif", "jpeg", "jpg",
+            "pbm", "pgm", "png", "pnm", "ppm", "qoi", "svg", "tga", "tif", "tiff", "webp"
+        ]
+        if target == "pdf" && files.allSatisfy({ imageExtensions.contains($0.pathExtension.lowercased()) }) {
+            let panel = NSSavePanel()
+            let stem = files.first?.deletingPathExtension().lastPathComponent ?? "converted"
+            panel.nameFieldStringValue = files.count == 1 ? "\(stem).pdf" : "combined.pdf"
+            panel.allowedContentTypes = [.pdf]
+            return panel.runModal() == .OK ? panel.url : nil
+        }
+
+        let panel = NSOpenPanel()
+        panel.title = "Choose Output Folder"
+        panel.prompt = "Choose"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        return panel.runModal() == .OK ? panel.url : nil
     }
 }

@@ -60,25 +60,16 @@ struct WaveformEditor: View {
     @StateObject private var playback = AudioPlayback()
     @State private var draggingStart: Bool?
 
-    private let gold = Color(red: 0.98, green: 0.76, blue: 0.29)
-    private let blue = Color(red: 0.35, green: 0.68, blue: 1.0)
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Layout.lg) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("WAVEFORM")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(.white.opacity(0.56))
-                    Text(url.lastPathComponent)
-                        .font(.system(size: 13, weight: .medium))
-                        .lineLimit(1)
-                }
+                Text(url.lastPathComponent)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
                 Spacer()
                 Text(timeLabel(duration))
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(Palette.muted)
             }
             mainWaveform
                 .frame(height: 188)
@@ -94,20 +85,20 @@ struct WaveformEditor: View {
                 Text(timeLabel(duration))
             }
             .font(.system(size: 10, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.45))
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
+            .foregroundStyle(Palette.quiet)
+            HStack(alignment: .center, spacing: Layout.lg) {
+                VStack(alignment: .leading, spacing: Layout.xs) {
                     Text("SELECTION")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .tracking(1)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(Palette.subdued)
                     Text(timeLabel(max(end - start, 0)))
                         .font(.system(size: 27, weight: .semibold, design: .rounded))
                 }
                 Spacer()
                 Text(timeLabel(playback.position))
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(Palette.muted)
                 Button {
                     playback.toggle(source: url, start: start, end: end)
                 } label: {
@@ -121,17 +112,17 @@ struct WaveformEditor: View {
             }
             overview
                 .frame(height: 48)
-            HStack(spacing: 16) {
+            HStack(spacing: Layout.lg) {
                 labeledTime("START", value: $start)
                 labeledTime("END", value: $end)
                 Spacer()
                 Text("Drag the yellow handles to set the trim range")
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(Palette.subdued)
             }
         }
-        .padding(18)
-        .background(Color(red: 0.16, green: 0.17, blue: 0.185), in: RoundedRectangle(cornerRadius: 10))
+        .padding(Layout.lg)
+        .background(Palette.panel, in: RoundedRectangle(cornerRadius: 10))
         .onDisappear { playback.stop() }
     }
 
@@ -144,25 +135,24 @@ struct WaveformEditor: View {
             let left = CGFloat(startFraction) * width
             let right = CGFloat(endFraction) * width
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.black.opacity(0.55))
                 Rectangle()
-                    .fill(gold.opacity(0.13))
+                    .fill(Palette.overlayStrong)
+                Rectangle()
+                    .fill(Palette.audioSelectionFill)
                     .frame(width: max(right - left, 0), height: height)
                     .offset(x: left)
                     .allowsHitTesting(false)
                 WaveformBars(peaks: peaks, selection: startFraction...endFraction,
-                             selectedColor: gold.opacity(0.95), otherColor: .white.opacity(0.45))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 18)
+                             selectedColor: Palette.audioSelectionActive, otherColor: Palette.quiet)
+                    .padding(.vertical, Layout.lg)
                     .allowsHitTesting(false)
                 Rectangle()
-                    .fill(blue)
+                    .fill(Palette.audioPlayhead)
                     .frame(width: 2, height: height)
                     .offset(x: CGFloat(clamp(playback.position / max(duration, 0.001))) * width)
                     .allowsHitTesting(false)
-                handle(at: left, height: height, width: width, isStart: true)
-                handle(at: right, height: height, width: width, isStart: false)
+                handle(at: left, height: height, isStart: true)
+                handle(at: right, height: height, isStart: false)
             }
             .coordinateSpace(name: "waveform")
             .contentShape(Rectangle())
@@ -180,17 +170,27 @@ struct WaveformEditor: View {
         }
     }
 
-    private func handle(at x: CGFloat, height: CGFloat, width: CGFloat, isStart: Bool) -> some View {
-        ZStack {
-            Rectangle().fill(gold).frame(width: 4, height: height)
-            VStack {
-                Circle().fill(gold).frame(width: 9, height: 9)
-                Spacer()
-                Circle().fill(gold).frame(width: 9, height: 9)
+    private func handle(at x: CGFloat, height: CGFloat, isStart: Bool) -> some View {
+        let handleWidth: CGFloat = Layout.md
+        let armLength: CGFloat = Layout.sm
+        let path = Path { path in
+            if isStart {
+                path.move(to: CGPoint(x: armLength, y: 0))
+                path.addLine(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: 0, y: height))
+                path.addLine(to: CGPoint(x: armLength, y: height))
+            } else {
+                path.move(to: CGPoint(x: handleWidth - armLength, y: 0))
+                path.addLine(to: CGPoint(x: handleWidth, y: 0))
+                path.addLine(to: CGPoint(x: handleWidth, y: height))
+                path.addLine(to: CGPoint(x: handleWidth - armLength, y: height))
             }
         }
-        .frame(width: 24, height: height)
-        .position(x: min(max(x, 12), width - 12), y: height / 2)
+
+        return path
+            .stroke(Palette.audioSelection, style: StrokeStyle(lineWidth: Layout.xs, lineCap: .round, lineJoin: .round))
+            .frame(width: handleWidth, height: height)
+            .position(x: isStart ? x + handleWidth / 2 : x - handleWidth / 2, y: height / 2)
         .allowsHitTesting(false)
         .accessibilityLabel(isStart ? "Trim start handle" : "Trim end handle")
     }
@@ -203,26 +203,26 @@ struct WaveformEditor: View {
             let left = CGFloat(startFraction) * width
             let right = CGFloat(endFraction) * width
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 5).fill(Color.black.opacity(0.42))
+                RoundedRectangle(cornerRadius: 5).fill(Palette.overlaySubtle)
                 WaveformBars(peaks: peaks, selection: 0...1,
-                             selectedColor: .white.opacity(0.45), otherColor: .white.opacity(0.45))
-                    .padding(.vertical, 7)
-                Rectangle().fill(gold.opacity(0.2))
+                             selectedColor: Palette.quiet, otherColor: Palette.quiet)
+                    .padding(.vertical, Layout.sm)
+                Rectangle().fill(Palette.audioSelectionOverview)
                     .frame(width: max(right - left, 0), height: geometry.size.height)
                     .offset(x: left)
-                Rectangle().fill(gold).frame(width: 4).offset(x: left)
-                Rectangle().fill(gold).frame(width: 4).offset(x: right - 4)
-                Rectangle().fill(blue).frame(width: 2)
+                Rectangle().fill(Palette.audioSelection).frame(width: 4).offset(x: left)
+                Rectangle().fill(Palette.audioSelection).frame(width: 4).offset(x: right - 4)
+                Rectangle().fill(Palette.audioPlayhead).frame(width: 2)
                     .offset(x: CGFloat(clamp(playback.position / max(duration, 0.001))) * width)
             }
         }
     }
 
     private func labeledTime(_ title: String, value: Binding<Double>) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: Layout.xs) {
             Text(title)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(Palette.subdued)
             TextField(title, value: value, format: .number.precision(.fractionLength(0...2)))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 95)
@@ -237,7 +237,7 @@ struct WaveformEditor: View {
     }
 }
 
-private struct WaveformBars: View {
+struct WaveformBars: View {
     let peaks: [Double]
     let selection: ClosedRange<Double>
     let selectedColor: Color

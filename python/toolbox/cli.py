@@ -34,13 +34,18 @@ def run(arguments: list[str]) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     listing = subparsers.add_parser("list", help="List available tools")
     listing.add_argument("--json", action="store_true")
+    bootstrap = subparsers.add_parser("bootstrap", help="Load the tool list and initial tool")
+    bootstrap.add_argument("--json", action="store_true")
     describing = subparsers.add_parser("describe", help="Describe one tool")
     describing.add_argument("tool")
     describing.add_argument("--json", action="store_true")
     inspecting = subparsers.add_parser("inspect", help="Inspect an input file")
     inspecting.add_argument("path")
-    inspecting.add_argument("--waveform", action="store_true", help="Include waveform display peaks for audio")
+    inspecting.add_argument("--waveform", action="store_true", help="Include waveform display peaks for media")
     inspecting.add_argument("--json", action="store_true")
+    conversion_targets = subparsers.add_parser("conversion-targets", help="List formats shared by selected files")
+    conversion_targets.add_argument("paths", nargs="+")
+    conversion_targets.add_argument("--json", action="store_true")
     running = subparsers.add_parser("run", help="Run a tool")
     run_subparsers = running.add_subparsers(dest="tool", required=True)
     for entry in all_tools():
@@ -53,29 +58,59 @@ def run(arguments: list[str]) -> int:
     try:
         if args.command == "list":
             results = [{"id": entry.id, "title": entry.title, "description": entry.description} for entry in all_tools()]
-            emit(results) if wants_json else [print(f"{item['id']}: {item['title']}") for item in results]
+            if wants_json:
+                emit(results)
+            else:
+                for item in results:
+                    print(f"{item['id']}: {item['title']}")
+        elif args.command == "bootstrap":
+            entries = all_tools()
+            results = [{"id": entry.id, "title": entry.title, "description": entry.description} for entry in entries]
+            result = {"tools": results, "initial_tool": entries[0].describe() if entries else None}
+            if wants_json:
+                emit(result)
+            else:
+                print(json.dumps(result, indent=2))
         elif args.command == "describe":
             result = get_tool(args.tool).describe()
-            emit(result) if wants_json else print(json.dumps(result, indent=2))
+            if wants_json:
+                emit(result)
+            else:
+                print(json.dumps(result, indent=2))
         elif args.command == "inspect":
             path = Path(args.path).expanduser().resolve()
             if not path.is_file():
                 raise ValueError(f"Input file does not exist: {path}")
-            if path.suffix.lower() in {".mp3", ".m4a", ".wav"}:
-                from .tools.trim_audio import audio_duration, audio_waveform
-
-                duration = audio_duration(path)
-                result = {"kind": "audio", "duration": duration}
-                if args.waveform:
-                    result["waveform"] = audio_waveform(path, duration)
-            elif path.suffix.lower() == ".pdf":
+            if path.suffix.lower() == ".pdf":
                 import pymupdf
 
                 with pymupdf.open(path) as document:
                     result = {"kind": "pdf", "page_count": document.page_count}
             else:
-                raise ValueError("No inspector for this file type")
-            emit(result) if wants_json else print(result)
+                from .tools.trim import MEDIA_EXTENSIONS, media_info, media_waveform
+
+                if path.suffix.lower() not in MEDIA_EXTENSIONS:
+                    raise ValueError("No inspector for this file type")
+                result = media_info(path)
+                if args.waveform:
+                    result["waveform"] = media_waveform(
+                        path,
+                        float(result["duration"]),
+                        bool(result["has_audio"]),
+                    )
+            if wants_json:
+                emit(result)
+            else:
+                print(result)
+        elif args.command == "conversion-targets":
+            from .tools.convert_files import common_targets
+
+            result = common_targets([Path(path) for path in args.paths])
+            if wants_json:
+                emit(result)
+            else:
+                for target in result:
+                    print(target)
         else:
             entry = get_tool(args.tool)
             values = {
@@ -84,7 +119,10 @@ def run(arguments: list[str]) -> int:
             }
             output = entry.function(**values)
             result = {"ok": True, "tool": entry.id, "output": str(output.resolve())}
-            emit(result) if wants_json else print(result["output"])
+            if wants_json:
+                emit(result)
+            else:
+                print(result["output"])
         return 0
     except Exception as error:
         message = str(error) or error.__class__.__name__

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- The two rounded crop marks from the supplied CAD drawing. -->
+  <g stroke="currentColor" stroke-width="10" stroke-linejoin="round">
+    <path d="M25 5V68a7 7 0 0 0 7 7h53"/>
+    <path d="M75 95V32a7 7 0 0 0-7-7H15"/>
+  </g>
+</svg>
