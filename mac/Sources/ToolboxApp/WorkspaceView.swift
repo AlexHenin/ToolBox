@@ -737,49 +737,110 @@ private struct CropPreview: View {
     @State private var resizeStartCrop: CGRect?
     @State private var moveStartCrop: CGRect?
     @State private var drawingStart: CGPoint?
+    @State private var zoomScale: CGFloat = 1
+
+    private let minimumZoom: CGFloat = 1
+    private let maximumZoom: CGFloat = 3
+    private let zoomStep: CGFloat = 0.25
 
     var body: some View {
         GeometryReader { geometry in
             if let preview = preview(fitting: geometry.size) {
-                let width = preview.size.width
-                let height = preview.size.height
-                ZStack(alignment: .topLeading) {
-                    Image(nsImage: preview.image)
-                        .resizable()
-                        .frame(width: width, height: height)
-
-                    Path { path in
-                        path.addRect(CGRect(x: 0, y: 0, width: width, height: height))
-                        path.addRect(CGRect(
-                            x: crop.minX * width,
-                            y: crop.minY * height,
-                            width: crop.width * width,
-                            height: crop.height * height
-                        ))
+                let width = preview.size.width * zoomScale
+                let height = preview.size.height * zoomScale
+                ZStack(alignment: .bottom) {
+                    ScrollView([.horizontal, .vertical]) {
+                        cropCanvas(image: preview.image, width: width, height: height)
+                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                     }
-                    .fill(Palette.selectionScrim, style: FillStyle(eoFill: true))
-                    .allowsHitTesting(false)
 
-                    Rectangle()
-                        .fill(Palette.selectionScrim.opacity(0.001))
-                        .overlay { Rectangle().stroke(Palette.accent, lineWidth: 2) }
-                        .frame(width: crop.width * width, height: crop.height * height)
-                        .offset(x: crop.minX * width, y: crop.minY * height)
-
-                    ForEach(CropHandle.allCases, id: \.self) { handle in
-                        resizeHandle(handle, width: width, height: height)
-                    }
+                    zoomControls
+                        .padding(Layout.md)
                 }
-                .contentShape(Rectangle())
-                .gesture(cropCanvasGesture(width: width, height: height))
-                .frame(width: width, height: height)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Text("Could not preview this file").foregroundStyle(Palette.muted)
             }
         }
         .padding(Layout.sm)
         .background(Palette.panel, in: RoundedRectangle(cornerRadius: 9))
+        .onChange(of: url) { zoomScale = minimumZoom }
+    }
+
+    private func cropCanvas(image: NSImage, width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            Image(nsImage: image)
+                .resizable()
+                .frame(width: width, height: height)
+
+            Path { path in
+                path.addRect(CGRect(x: 0, y: 0, width: width, height: height))
+                path.addRect(CGRect(
+                    x: crop.minX * width,
+                    y: crop.minY * height,
+                    width: crop.width * width,
+                    height: crop.height * height
+                ))
+            }
+            .fill(Palette.selectionScrim, style: FillStyle(eoFill: true))
+            .allowsHitTesting(false)
+
+            Rectangle()
+                .fill(Palette.selectionScrim.opacity(0.001))
+                .overlay { Rectangle().stroke(Palette.accent, lineWidth: 2) }
+                .frame(width: crop.width * width, height: crop.height * height)
+                .offset(x: crop.minX * width, y: crop.minY * height)
+
+            ForEach(CropHandle.allCases, id: \.self) { handle in
+                resizeHandle(handle, width: width, height: height)
+            }
+        }
+        .contentShape(Rectangle())
+        .gesture(cropCanvasGesture(width: width, height: height))
+        .frame(width: width, height: height)
+    }
+
+    private var zoomControls: some View {
+        HStack(spacing: Layout.sm) {
+            zoomButton(systemName: "minus", label: "Zoom out", isDisabled: zoomScale <= minimumZoom) {
+                changeZoom(by: -zoomStep)
+            }
+
+            Text("\(Int((zoomScale * 100).rounded()))%")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Palette.brightMuted)
+                .frame(minWidth: 42)
+
+            zoomButton(systemName: "plus", label: "Zoom in", isDisabled: zoomScale >= maximumZoom) {
+                changeZoom(by: zoomStep)
+            }
+        }
+        .padding(Layout.xs)
+        .background(Palette.overlayStrong, in: Capsule())
+    }
+
+    private func zoomButton(
+        systemName: String,
+        label: String,
+        isDisabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Palette.brightMuted)
+                .frame(width: 28, height: 28)
+                .background(Color.black.opacity(0.55), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.45 : 1)
+        .accessibilityLabel(label)
+    }
+
+    private func changeZoom(by amount: CGFloat) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            zoomScale = min(max(zoomScale + amount, minimumZoom), maximumZoom)
+        }
     }
 
     private func preview(fitting available: CGSize) -> (image: NSImage, size: CGSize)? {
@@ -790,7 +851,7 @@ private struct CropPreview: View {
             let bounds = page.bounds(for: .cropBox)
             sourceSize = bounds.size
             sourceImage = page.thumbnail(
-                of: CGSize(width: max(available.width * 2, 1), height: max(available.height * 2, 1)),
+                of: CGSize(width: max(available.width * maximumZoom, 1), height: max(available.height * maximumZoom, 1)),
                 for: .cropBox
             )
         } else {
