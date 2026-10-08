@@ -6,73 +6,170 @@ A local Mac utility app that also doubles as an MCP tool server for AI clients. 
 - A command-line command
 - An MCP tool an AI model can discover and call
 
-Toolbox currently provides Convert, Crop, and Trim. The app and tool server operate on local files, so the same utilities are available for direct use and automated workflows without uploading files to a hosted conversion service.
+ToolBox currently provides Convert, Crop, and Trim. The app and tool server operate on local files, so the same utilities are available for direct use and automated workflows without uploading files to a hosted conversion service.
 
 ## Installation
 
-### Requirements
+ToolBox is currently installed from its source code. You do not need to know how to program, but you will copy a few commands into Terminal. Run each numbered step in order and wait for it to finish before moving to the next one.
 
-- macOS 14 or newer
-- Python 3.11 or newer
-- Apple Command Line Tools (`xcode-select --install`)
-- [Homebrew](https://brew.sh/) for the media dependencies
+You need:
 
-Install the external tools used by Convert and Trim:
+- A Mac running macOS 14 Sonoma or newer
+- An administrator account on the Mac
+- An internet connection
+- Several gigabytes of free space for Apple's developer tools and the media engines
+
+### 1. Open Terminal
+
+Press **Command–Space**, type **Terminal**, and press **Return**. Paste commands into the Terminal window without including the `$` prompt shown by some websites.
+
+### 2. Install Apple's Command Line Tools
+
+Paste this command and press **Return**:
 
 ```sh
-brew tap shineexxx/tap
-brew install --cask shark
-brew install ffmpeg
+xcode-select --install
 ```
 
-### Approve Shark on first use
+If a window appears, click **Install** and wait for it to finish. If Terminal says the tools are already installed, continue to the next step.
 
-Shark is currently signed ad hoc rather than notarized with an Apple Developer ID. Because of this, macOS Gatekeeper blocks Shark the first time Toolbox tries to use the Convert tool. This approval is normally required only once for each Shark installation.
+### 3. Install Homebrew
 
-To approve it:
-
-1. Click **Done** in the “Shark Not Opened” dialog.
-2. Open **System Settings → Privacy & Security**.
-3. Scroll down to **Security**.
-4. Find the message saying Shark was blocked and click **Open Anyway**.
-5. Authenticate when prompted, then confirm **Open**.
-6. Retry **Convert** in Toolbox.
-
-Only approve Shark if you installed it from the documented [`shineexxx/tap`](https://github.com/shineexxx/homebrew-tap) Homebrew source and trust that software. Reinstalling the same Shark release does not avoid the first-run Gatekeeper approval.
-
-Clone Toolbox, prepare its Python environment, and install the app:
+[Homebrew](https://brew.sh/) installs the supporting software ToolBox needs. Paste its official installer command:
 
 ```sh
-git clone https://github.com/AlexHenin/Toolbox.git
-cd Toolbox
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+The installer may ask for your Mac login password. Terminal does not show dots or other characters while you type a password; type it normally and press **Return**.
+
+At the end, Homebrew may print **Next steps** with one or two commands for adding `brew` to your shell. Copy and run those commands exactly. Then confirm Homebrew is ready:
+
+```sh
+brew --version
+```
+
+### 4. Install Python, Shark, and FFmpeg
+
+Paste this entire block:
+
+```sh
+brew install python ffmpeg
+brew tap shineexxx/tap
+brew install --cask shark
+```
+
+Python runs ToolBox's local tools. [Shark](https://github.com/shineexxx/shark) powers Convert, while FFmpeg and FFprobe power Trim.
+
+### 5. Download ToolBox
+
+This places the project in a folder named `ToolBox` inside your home folder:
+
+```sh
+cd ~
+git clone https://github.com/AlexHenin/ToolBox.git
+cd ToolBox
+```
+
+If Terminal says the `ToolBox` folder already exists, you may already have a copy. Run `cd ~/ToolBox` instead of cloning it again.
+
+### 6. Set up and install ToolBox
+
+From inside the `ToolBox` folder, run:
+
+```sh
+./setup.sh
+./install-app.sh
+```
+
+The first command creates ToolBox's private Python environment. The second builds the Mac app and installs it at `/Applications/Local Utilities/Toolbox.app`.
+
+### 7. Open ToolBox
+
+```sh
+open '/Applications/Local Utilities/Toolbox.app'
+```
+
+You can open it normally from that location afterward. Keep the `~/ToolBox` source folder if you want easy updates later.
+
+### 8. Approve Shark the first time you use Convert
+
+Shark is currently signed ad hoc rather than notarized with a paid Apple Developer ID, so macOS blocks it once. This approval is for Shark, not ToolBox:
+
+1. Try converting a file in ToolBox.
+2. In the “Shark Not Opened” dialog, click **Done**.
+3. Open **System Settings → Privacy & Security**.
+4. Scroll down to **Security**.
+5. Find the message saying Shark was blocked and click **Open Anyway**.
+6. Authenticate with your Mac password or Touch ID, then confirm **Open**.
+7. Return to ToolBox and try Convert again.
+
+Only approve Shark if you installed it using the documented [`shineexxx/tap`](https://github.com/shineexxx/homebrew-tap) command above and trust that software. This approval is normally required only once for each Shark installation.
+
+### Update ToolBox
+
+Open Terminal and run:
+
+```sh
+cd ~/ToolBox
+git pull
 ./setup.sh
 ./install-app.sh
 open '/Applications/Local Utilities/Toolbox.app'
 ```
 
-The installer builds and locally signs the SwiftUI app, then copies the app, Python environment, and tool files to `/Applications/Local Utilities`. It may ask for permission to write to the Applications folder. To update an existing installation, pull the latest changes and run the setup and install scripts again:
+### Check that the command-line tools work
+
+This optional command should list Convert, Crop, and Trim:
 
 ```sh
-git pull
+cd ~/ToolBox
+./.venv/bin/toolbox list
+```
+
+### Troubleshooting
+
+**Terminal says `brew: command not found`**
+
+Close and reopen Terminal. If that does not help, rerun the **Next steps** commands printed by the Homebrew installer, then run `brew --version` again.
+
+**Terminal says `Python tools are missing`**
+
+Run these commands from the project folder:
+
+```sh
+cd ~/ToolBox
+brew install python
 ./setup.sh
 ./install-app.sh
 ```
 
-You can verify the command-line tools separately with:
+**Convert says Shark is missing**
 
 ```sh
-./.venv/bin/toolbox list
+brew tap shineexxx/tap
+brew install --cask shark
 ```
 
-The app looks for the installed `.venv/bin/toolbox` beside the application. `TOOLBOX_CLI` can override that path for development. macOS can show a generic icon for an app opened directly from a synced Documents folder; the installed app uses the bundled hammer icon.
+If Shark is installed but macOS blocks it, follow the approval instructions in step 8.
 
-Convert uses the local MIT-licensed [`Shark`](https://github.com/shineexxx/shark) CLI. Trim uses FFmpeg and FFprobe. Conversion and editing happen locally.
+**Trim says FFmpeg is missing**
+
+```sh
+brew install ffmpeg
+```
+
+**The installed app does not show your latest update**
+
+Quit ToolBox completely, run the commands under **Update ToolBox**, and reopen the installed copy from `/Applications/Local Utilities`.
+
+The app uses the copied Python environment beside the installed application. `TOOLBOX_CLI` can override its location for development. Convert, Crop, and Trim process files locally; ToolBox does not upload them to a hosted conversion service.
 
 ## External engines
 
-Toolbox uses [Shark](https://github.com/shineexxx/shark) as the conversion engine behind the Convert tool. Shark is installed separately and is not bundled with Toolbox. It is available under the MIT License; see [Third-party notices](THIRD_PARTY_NOTICES.md) and [Shark's license](https://github.com/shineexxx/shark/blob/main/LICENSE).
+ToolBox uses [Shark](https://github.com/shineexxx/shark) as the conversion engine behind the Convert tool. Shark is installed separately and is not bundled with ToolBox. It is available under the MIT License; see [Third-party notices](THIRD_PARTY_NOTICES.md) and [Shark's license](https://github.com/shineexxx/shark/blob/main/LICENSE).
 
-Toolbox uses [FFmpeg](https://ffmpeg.org/) and FFprobe as the media engine behind the Trim tool. They are installed separately and are not bundled with Toolbox. FFmpeg is primarily licensed under the LGPL 2.1 or later; builds containing optional GPL components are covered by the GPL 2 or later. See [Third-party notices](THIRD_PARTY_NOTICES.md) and [FFmpeg's official licensing information](https://ffmpeg.org/legal.html).
+ToolBox uses [FFmpeg](https://ffmpeg.org/) and FFprobe as the media engine behind the Trim tool. They are installed separately and are not bundled with ToolBox. FFmpeg is primarily licensed under the LGPL 2.1 or later; builds containing optional GPL components are covered by the GPL 2 or later. See [Third-party notices](THIRD_PARTY_NOTICES.md) and [FFmpeg's official licensing information](https://ffmpeg.org/legal.html).
 
 ## MCP tool server
 
@@ -154,4 +251,4 @@ The example is intentionally minimal; production tools should validate inputs an
 - `mac/Assets/AppIcon.svg`: white-background hammer icon used by `build-app.sh`
 - `tests/`: CLI and tool checks
 
-This is a personal local build. The installed app is signed locally and uses the adjacent project-local Python environment. It has no updater or HTTP server.
+This is a personal local build. The installed app is signed locally and uses its adjacent Python environment. ToolBox has no updater or HTTP server.
