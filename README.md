@@ -1,4 +1,4 @@
-# Toolbox
+# ToolBox
 
 A local Mac utility app that also doubles as an MCP tool server for AI clients. Each utility is defined once as a typed Python function and automatically becomes:
 
