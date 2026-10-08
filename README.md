@@ -127,6 +127,8 @@ cd ~/ToolBox
 ./.venv/bin/toolbox list
 ```
 
+Enjoy!
+
 ### Troubleshooting
 
 **Terminal says `brew: command not found`**
