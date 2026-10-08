@@ -47,6 +47,10 @@ The app looks for the installed `.venv/bin/toolbox` beside the application. `TOO
 
 Convert uses the local MIT-licensed [`Shark`](https://github.com/shineexxx/shark) CLI. Trim uses FFmpeg and FFprobe. Conversion and editing happen locally.
 
+## Conversion engine
+
+Toolbox uses [Shark](https://github.com/shineexxx/shark) as the conversion engine behind the Convert tool. Shark is installed separately and is not bundled with Toolbox. It is available under the MIT License; see [Third-party notices](THIRD_PARTY_NOTICES.md) and [Shark's license](https://github.com/shineexxx/shark/blob/main/LICENSE).
+
 The setup installs the Python package in the project environment and creates a CLI launcher that loads `python/` directly. A new tool file becomes available to the project CLI without rerunning setup. Run `./install-app.sh` and reopen the installed app to make the new tool available there.
 
 ## CLI examples
