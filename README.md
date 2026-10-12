@@ -49,7 +49,7 @@ At the end, Homebrew may print **Next steps** with one or two commands for addin
 brew --version
 ```
 
-### 4. Install Python, Shark, and FFmpeg
+### 4. Install Python, Shark, FFmpeg, and LibreOffice
 
 Paste this entire block:
 
@@ -57,9 +57,10 @@ Paste this entire block:
 brew install python ffmpeg
 brew tap shineexxx/tap
 brew install --cask shark
+brew install --cask libreoffice
 ```
 
-Python runs ToolBox's local tools. [Shark](https://github.com/shineexxx/shark) powers Convert, while FFmpeg and FFprobe power Trim.
+Python runs ToolBox's local tools. [Shark](https://github.com/shineexxx/shark) powers most conversions, [LibreOffice](https://www.libreoffice.org/) converts Word documents to PDF with their images and page layout intact, and FFmpeg and FFprobe power Trim.
 
 ### 5. Download ToolBox
 
@@ -155,6 +156,14 @@ brew install --cask shark
 
 If Shark is installed but macOS blocks it, follow the approval instructions in step 8.
 
+**Word-to-PDF conversion says LibreOffice is missing**
+
+```sh
+brew install --cask libreoffice
+```
+
+Reopen ToolBox after installation. Word-to-PDF uses LibreOffice instead of Shark's document renderer, which can omit embedded equation images and change pagination.
+
 **Trim says FFmpeg is missing**
 
 ```sh
@@ -170,6 +179,8 @@ The app uses the copied Python environment beside the installed application. `TO
 ## External engines
 
 ToolBox uses [Shark](https://github.com/shineexxx/shark) as the conversion engine behind the Convert tool. Shark is installed separately and is not bundled with ToolBox. It is available under the MIT License; see [Third-party notices](THIRD_PARTY_NOTICES.md) and [Shark's license](https://github.com/shineexxx/shark/blob/main/LICENSE).
+
+ToolBox uses separately installed [LibreOffice](https://www.libreoffice.org/) for DOC, DOCX, and ODT to PDF conversion. It is not bundled with ToolBox. See [Third-party notices](THIRD_PARTY_NOTICES.md) and [LibreOffice's licensing information](https://www.libreoffice.org/licenses/).
 
 ToolBox uses [FFmpeg](https://ffmpeg.org/) and FFprobe as the media engine behind the Trim tool. They are installed separately and are not bundled with ToolBox. FFmpeg is primarily licensed under the LGPL 2.1 or later; builds containing optional GPL components are covered by the GPL 2 or later. See [Third-party notices](THIRD_PARTY_NOTICES.md) and [FFmpeg's official licensing information](https://ffmpeg.org/legal.html).
 
@@ -225,7 +236,9 @@ The setup installs the Python package in the project environment and creates CLI
 
 The crop coordinates are relative to the source: `x,y,width,height`, from 0 to 1. The tool accepts PDFs and Pillow-supported image formats. PDF pages are rendered as images at 200 DPI by default, so removed content does not remain embedded. Output text is therefore not selectable. `--dpi` accepts 72–600.
 
-Convert shows the Shark output formats shared by all selected files. Images converted to PDF are merged into one document in their drag order. Other multi-file conversions are processed separately into one output folder.
+Convert shows the output formats shared by all selected files. Images converted to PDF are merged into one document in their drag order. Other multi-file conversions are processed separately into one output folder. DOC, DOCX, and ODT to PDF use LibreOffice's Writer exporter to preserve embedded images, equations, tables, and page breaks. These conversions require LibreOffice; Toolbox reports an installation instruction if it is missing rather than producing a PDF with missing content. Existing PDFs are preserved by giving new exports a numbered filename when needed.
+
+LibreOffice is discovered on PATH or in `/Applications/LibreOffice.app` and `~/Applications/LibreOffice.app`. Set `LIBREOFFICE_CLI` to an executable path to use another installation. Each conversion runs headlessly with an isolated profile and a three-minute timeout, so it can run through the GUI, CLI, or MCP while LibreOffice is open. Other conversions continue to use Shark.
 
 In the app, Trim supports audio and video formats. Audio uses the waveform editor; video adds an embedded player and correlated frame strip above its compact waveform timeline. The CLI can provide the same timeline data with `toolbox inspect input.mp4 --waveform --json`.
 

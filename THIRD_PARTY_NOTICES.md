@@ -8,6 +8,12 @@ Shark is licensed under the [MIT License](https://github.com/shineexxx/shark/blo
 
 Copyright © 2026 Shark contributors.
 
+## LibreOffice
+
+Toolbox invokes separately installed [LibreOffice](https://www.libreoffice.org/) for DOC, DOCX, and ODT to PDF conversion. LibreOffice is not bundled with this repository.
+
+LibreOffice is licensed under the Mozilla Public License version 2.0, with components under additional open-source licenses. See [LibreOffice's official license information](https://www.libreoffice.org/licenses/).
+
 ## FFmpeg
 
 Toolbox invokes separately installed [FFmpeg](https://ffmpeg.org/) and FFprobe executables as the media engine for the Trim tool. FFmpeg is not bundled with this repository.

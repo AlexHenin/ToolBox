@@ -26,4 +26,7 @@ fi
 if ! command -v shark >/dev/null 2>&1; then
   printf '%s\n' 'Shark is needed for Convert. Install with: brew tap shineexxx/tap && brew install --cask shark'
 fi
+if ! command -v soffice >/dev/null 2>&1 && [ ! -x /Applications/LibreOffice.app/Contents/MacOS/soffice ]; then
+  printf '%s\n' 'LibreOffice is needed for Word-to-PDF conversion. Install with: brew install --cask libreoffice'
+fi
 printf '%s\n' "Ready: $(pwd)/.venv/bin/toolbox list"

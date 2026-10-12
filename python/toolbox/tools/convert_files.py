@@ -10,6 +10,7 @@ from PIL import Image, ImageOps, ImageSequence, UnidentifiedImageError
 
 from toolbox import FileList, tool
 from toolbox.files import atomic_output, check_output
+from toolbox.office import convert_to_pdf
 
 
 IMAGE_EXTENSIONS = {
@@ -48,7 +49,7 @@ DOCUMENT_TARGETS = ["pdf", "docx", "rtf", "html", "txt", "md", "png", "jpg"]
 
 @tool(
     title="Convert",
-    description="Convert images, documents, audio, and video locally with Shark.",
+    description="Convert files locally with Shark and preserve Word-to-PDF layout with LibreOffice.",
 )
 def convert_files(files: FileList, target: str, output: Path) -> Path:
     sources = [_source(path) for path in files]
@@ -66,7 +67,12 @@ def convert_files(files: FileList, target: str, output: Path) -> Path:
     destination = output.expanduser().resolve()
     if not destination.is_dir():
         raise ValueError(f"Output folder does not exist: {destination}")
-    _run_shark(sources, target, destination)
+    office_sources = [source for source in sources if target == "pdf" and source.suffix.lower() in {".doc", ".docx", ".odt"}]
+    other_sources = [source for source in sources if source not in office_sources]
+    for source in office_sources:
+        convert_to_pdf(source, destination)
+    if other_sources:
+        _run_shark(other_sources, target, destination)
     return destination
 
 
