@@ -614,6 +614,9 @@ private struct ConversionFileThumbnail: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             preview
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded(open))
+                .help("Open \(url.lastPathComponent) full screen")
             if canRemove && isHovering {
                 FileRemovalButton(
                     helpText: "Remove \(url.lastPathComponent)",
@@ -624,8 +627,6 @@ private struct ConversionFileThumbnail: View {
             }
         }
         .onHover { isHovering = $0 }
-        .simultaneousGesture(TapGesture().onEnded(open))
-        .help("Open \(url.lastPathComponent) full screen")
     }
 
     @ViewBuilder
